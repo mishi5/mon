@@ -34,10 +34,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pyxel", specifier = ">=2.0" }]
+requires-dist = [{ name = "pyxel", specifier = ">=2.8,<3" }]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8.0" }]
+dev = [{ name = "pytest", specifier = ">=9.0" }]
 
 [[package]]
 name = "packaging"
