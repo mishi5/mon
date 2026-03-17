@@ -1,7 +1,7 @@
 """Monster data structures and stat calculation formulas."""
 from __future__ import annotations
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 def calc_hp(base: int, level: int) -> int:
@@ -29,7 +29,7 @@ class Move:
     accuracy: int    # 0–100
 
 
-@dataclass
+@dataclass(frozen=True)
 class MonsterSpec:
     """Immutable master data for a monster species."""
     id: int
@@ -59,9 +59,7 @@ class Monster:
         return self.current_hp <= 0
 
     def get_stat(self, stat: str) -> int:
-        """Return computed stat for current level."""
-        if stat == "hp":
-            return calc_hp(self.spec.base_stats["hp"], self.level)
+        """Return computed stat for current level. Do not use for HP — use max_hp directly."""
         return calc_stat(self.spec.base_stats[stat], self.level)
 
 

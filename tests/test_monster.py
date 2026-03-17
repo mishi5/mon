@@ -1,4 +1,3 @@
-import math
 from models.monster import calc_hp, calc_stat, exp_to_next
 
 
