@@ -3,12 +3,12 @@ name = "mon"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
-    "pyxel>=2.0",
+    "pyxel>=2.8,<3",
 ]
 
 [dependency-groups]
 dev = [
-    "pytest>=8.0",
+    "pytest>=9.0",
 ]
 
 [tool.pytest.ini_options]
