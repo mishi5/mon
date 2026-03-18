@@ -4,6 +4,7 @@ from __future__ import annotations
 import random
 import pyxel
 from scene_manager import Scene, SceneManager
+from gfx import jtext, text_width
 from models.player import Player
 from models.monster import create_monster
 from data.monsters import MONSTERS, pick_encounter
@@ -50,7 +51,8 @@ class FieldScene(Scene):
         self._check_menu()
 
     def _any_key(self, keys: list[int]) -> bool:
-        return any(pyxel.btnp(k) for k in keys)
+        """移動キー：最初の1歩は即時、押しっぱなしは短インターバルでリピート。"""
+        return any(pyxel.btnp(k, 10, 4) for k in keys)
 
     def _handle_move(self) -> None:
         dx, dy = 0, 0
@@ -83,7 +85,9 @@ class FieldScene(Scene):
 
     def _get_tile(self, tx: int, ty: int) -> int:
         bank = AREA_MAP_BANK[self.player.area]
-        return pyxel.tilemap(bank).pget(tx, ty)
+        scale = TILE_SIZE // 8  # game tiles are 16px; Pyxel tilemap uses 8px cells
+        u, v = pyxel.tilemaps[bank].pget(tx * scale, ty * scale)
+        return (v // 8) * 32 + (u // 8)
 
     def _check_encounter(self) -> None:
         if random.random() < ENCOUNTER_RATE:
@@ -124,8 +128,8 @@ class FieldScene(Scene):
         # Player sprite (static tile until assets are ready)
         sx = (self.player.pos[0] - cam_x) * TILE_SIZE
         sy = (self.player.pos[1] - cam_y) * TILE_SIZE
-        pyxel.blt(sx, sy, 0, 0, 0, TILE_SIZE, TILE_SIZE, 0)
+        pyxel.blt(sx, sy, 1, 0, 0, TILE_SIZE, TILE_SIZE, 0)
         # Area name (top-right)
         area_names = {"field_1": "そうげん", "cave_1": "どうくつ"}
         name = area_names.get(self.player.area, self.player.area)
-        pyxel.text(SCREEN_WIDTH - len(name) * 4 - 4, 2, name, 7)
+        jtext(SCREEN_WIDTH - text_width(name) - 4, 2, name, 7)

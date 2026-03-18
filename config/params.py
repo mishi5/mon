@@ -38,10 +38,10 @@ DAMAGE_RANDOM_MIN       = 0.85   # lower bound of damage roll (0.85–1.0)
 # ── Keys (pyxel KEY_ integer constants) ─────────────────────────────────────
 # These values match pyxel's KEY_* constants; listed explicitly so this file
 # can be imported in tests without requiring a live Pyxel display.
-KEY_CONFIRM     = [13, 32]          # KEY_RETURN, KEY_SPACE
-KEY_CANCEL      = [81]              # KEY_Q
-KEY_MENU        = [69]              # KEY_E
-KEY_MOVE_UP     = [265, 87]         # KEY_UP,    KEY_W
-KEY_MOVE_DOWN   = [264, 83]         # KEY_DOWN,  KEY_S
-KEY_MOVE_LEFT   = [263, 65]         # KEY_LEFT,  KEY_A
-KEY_MOVE_RIGHT  = [262, 68]         # KEY_RIGHT, KEY_D
+KEY_CONFIRM     = [13, 32]              # KEY_RETURN, KEY_SPACE
+KEY_CANCEL      = [113]                 # KEY_Q
+KEY_MENU        = [101]                 # KEY_E
+KEY_MOVE_UP     = [1073741906, 119]     # KEY_UP,    KEY_W
+KEY_MOVE_DOWN   = [1073741905, 115]     # KEY_DOWN,  KEY_S
+KEY_MOVE_LEFT   = [1073741904, 97]      # KEY_LEFT,  KEY_A
+KEY_MOVE_RIGHT  = [1073741903, 100]     # KEY_RIGHT, KEY_D

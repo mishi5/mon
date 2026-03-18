@@ -3,6 +3,7 @@
 from __future__ import annotations
 import pyxel
 from scene_manager import Scene, SceneManager
+from gfx import jtext
 from models.player import Player
 from data.monsters import MONSTERS
 from save import save_game
@@ -43,6 +44,10 @@ class MenuScene(Scene):
     def _any(self, keys: list[int]) -> bool:
         return any(pyxel.btnp(k) for k in keys)
 
+    def _any_repeat(self, keys: list[int]) -> bool:
+        """カーソル移動用：押しっぱなしリピート。"""
+        return any(pyxel.btnp(k, 14, 4) for k in keys)
+
     def update(self) -> None:
         if self.save_msg_timer > 0:
             self.save_msg_timer -= 1
@@ -55,8 +60,8 @@ class MenuScene(Scene):
 
     def _update_main(self) -> None:
         n = len(_MAIN_ITEMS)
-        if self._any(KEY_MOVE_UP):     self.cursor = (self.cursor - 1) % n
-        elif self._any(KEY_MOVE_DOWN): self.cursor = (self.cursor + 1) % n
+        if self._any_repeat(KEY_MOVE_UP):     self.cursor = (self.cursor - 1) % n
+        elif self._any_repeat(KEY_MOVE_DOWN): self.cursor = (self.cursor + 1) % n
         elif self._any(KEY_CANCEL):
             self.sm.switch(self.return_scene)
         elif self._any(KEY_CONFIRM):
@@ -78,31 +83,31 @@ class MenuScene(Scene):
         elif self.phase == MenuPhase.BAG:   self._draw_bag()
 
     def _draw_main(self) -> None:
-        pyxel.text(8, 8, "メニュー", 7)
+        jtext(8, 8, "メニュー", 7)
         for i, item in enumerate(_MAIN_ITEMS):
             prefix = ">" if i == self.cursor else " "
-            pyxel.text(16, 24 + i * 12, prefix + item, 7)
+            jtext(16, 24 + i * 12, prefix + item, 7)
         if self.save_msg_timer > 0:
-            pyxel.text(8, SCREEN_HEIGHT - 12, self.save_msg, 10)
+            jtext(8, SCREEN_HEIGHT - 12, self.save_msg, 10)
 
     def _draw_party(self) -> None:
-        pyxel.text(8, 8, "てもち", 7)
+        jtext(8, 8, "てもち", 7)
         for i, mon in enumerate(self.player.party):
-            y = 24 + i * 20
-            pyxel.text(8, y,     mon.spec.name, 7)
-            pyxel.text(8, y + 8, f"Lv{mon.level}  HP{mon.current_hp}/{mon.max_hp}", 13)
+            y = 24 + i * 22
+            jtext(8, y,      mon.spec.name, 7)
+            jtext(8, y + 11, f"Lv{mon.level}  HP{mon.current_hp}/{mon.max_hp}", 13)
 
     def _draw_dex(self) -> None:
-        pyxel.text(8, 8, "ずかん", 7)
-        pyxel.text(8, 20, f"つかまえた: {len(self.player.caught_ids)}ひき", 7)
+        jtext(8, 8, "ずかん", 7)
+        jtext(8, 20, f"つかまえた: {len(self.player.caught_ids)}ひき", 7)
         for i, mid in enumerate(sorted(self.player.caught_ids)):
             if mid in MONSTERS:
-                pyxel.text(8, 32 + i * 10, f"No.{mid:03d} {MONSTERS[mid].name}", 7)
+                jtext(8, 32 + i * 10, f"No.{mid:03d} {MONSTERS[mid].name}", 7)
 
     def _draw_bag(self) -> None:
-        pyxel.text(8, 8, "バッグ", 7)
+        jtext(8, 8, "バッグ", 7)
         y = 24
         for item, count in self.player.items.items():
             label = "モンスターボール" if item == "pokeball" else item
-            pyxel.text(8, y, f"{label} x{count}", 7)
+            jtext(8, y, f"{label} x{count}", 7)
             y += 12

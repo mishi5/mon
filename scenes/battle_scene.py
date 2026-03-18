@@ -3,6 +3,7 @@
 from __future__ import annotations
 import pyxel
 from scene_manager import Scene, SceneManager
+from gfx import jtext
 from models.monster import Monster
 from models.player import Player
 from models.battle import calc_damage, try_catch, calc_exp_gain, apply_exp, enemy_choose_move
@@ -200,10 +201,10 @@ class BattleScene(Scene):
         pyxel.rect(0, _ENEMY_PANE_Y, SCREEN_WIDTH, _PANE_H, 5)
         if self.wild:
             pyxel.rectb(8, _ENEMY_PANE_Y + 8, _SPRITE_W, _SPRITE_H, 7)
-            pyxel.text(8,   _ENEMY_PANE_Y + 2, self.wild.spec.name, 7)
-            pyxel.text(160, _ENEMY_PANE_Y + 2, f"Lv{self.wild.level}", 7)
+            jtext(8,   _ENEMY_PANE_Y + 2, self.wild.spec.name, 7)
+            jtext(160, _ENEMY_PANE_Y + 2, f"Lv{self.wild.level}", 7)
             self._draw_hp_bar(160, _ENEMY_PANE_Y + 12, self.wild.current_hp, self.wild.max_hp)
-            pyxel.text(160, _ENEMY_PANE_Y + 18,
+            jtext(160, _ENEMY_PANE_Y + 18,
                        f"{self.wild.current_hp}/{self.wild.max_hp}", 7)
 
     def _draw_player_pane(self) -> None:
@@ -211,10 +212,10 @@ class BattleScene(Scene):
         mon = self.player.active_monster
         if mon:
             pyxel.rectb(160, _PLAYER_PANE_Y + 8, _SPRITE_W, _SPRITE_H, 7)
-            pyxel.text(8, _PLAYER_PANE_Y + 2,  mon.spec.name, 7)
-            pyxel.text(8, _PLAYER_PANE_Y + 10, f"Lv{mon.level}", 7)
+            jtext(8, _PLAYER_PANE_Y + 2,  mon.spec.name, 7)
+            jtext(8, _PLAYER_PANE_Y + 10, f"Lv{mon.level}", 7)
             self._draw_hp_bar(8, _PLAYER_PANE_Y + 20, mon.current_hp, mon.max_hp)
-            pyxel.text(8, _PLAYER_PANE_Y + 26,
+            jtext(8, _PLAYER_PANE_Y + 26,
                        f"{mon.current_hp}/{mon.max_hp}", 7)
 
     def _draw_command_menu(self) -> None:
@@ -224,7 +225,7 @@ class BattleScene(Scene):
             row = (i // 2) * 16
             color = 13 if i in _CMD_DISABLED else 7
             prefix = ">" if i == self.cursor else " "
-            pyxel.text(col + 8, _CMD_PANE_Y + 8 + row, f"{prefix}{cmd}", color)
+            jtext(col + 8, _CMD_PANE_Y + 8 + row, f"{prefix}{cmd}", color)
 
     def _draw_move_menu(self) -> None:
         mon = self.player.active_monster
@@ -233,16 +234,16 @@ class BattleScene(Scene):
             return
         for i, move in enumerate(mon.moves):
             prefix = ">" if i == self.cursor else " "
-            pyxel.text(8, _CMD_PANE_Y + 8 + i * 10, f"{prefix}{move.name}", 7)
+            jtext(8, _CMD_PANE_Y + 8 + i * 12, f"{prefix}{move.name}", 7)
 
     def _draw_message_box(self) -> None:
         pyxel.rect(0, _MSG_PANE_Y, SCREEN_WIDTH, _MSG_H, 1)
         pyxel.rectb(0, _MSG_PANE_Y, SCREEN_WIDTH, _MSG_H, 7)
         if self.messages and self.msg_index < len(self.messages):
-            pyxel.text(8, _MSG_PANE_Y + 8, self.messages[self.msg_index], 7)
+            jtext(8, _MSG_PANE_Y + 8, self.messages[self.msg_index], 7)
         # Show advance indicator unless on last message of a terminal state
         at_last = self.msg_index >= len(self.messages) - 1
         terminal = self.state in (BattleState.WIN, BattleState.LOSE,
                                   BattleState.FLEE, BattleState.CAUGHT)
         if not (at_last and terminal):
-            pyxel.text(SCREEN_WIDTH - 12, _MSG_PANE_Y + _MSG_H - 10, "v", 7)
+            jtext(SCREEN_WIDTH - 12, _MSG_PANE_Y + _MSG_H - 10, "v", 7)
