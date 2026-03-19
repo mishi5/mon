@@ -33,12 +33,20 @@ AREA_WARP_DEST = {
 _FLASH_FRAMES = 24
 
 
+# 向きID → スプライトのv座標（各行16px）
+# 前向き=0, 右向き=1, 左向き=2, 後ろ向き=3
+_DIR_V = {0: 0, 1: 16, 2: 32, 3: 48}
+
+
 class FieldScene(Scene):
     def __init__(self, sm: SceneManager, player_ref: list):
         self.sm = sm
         self.player_ref = player_ref
         self._flash_timer = 0
         self._flash_wild = None
+        self._dir = 0        # 0=下, 1=右, 2=左, 3=上
+        self._step = 0       # 歩数カウンタ（アニメフレーム切り替え用）
+        self._moving = False # 今フレーム移動したか
 
     @property
     def player(self) -> Player:
@@ -47,6 +55,7 @@ class FieldScene(Scene):
     def on_enter(self, **kwargs) -> None:
         self._flash_timer = 0
         self._flash_wild = None
+        self._moving = False
 
     def on_exit(self) -> None:
         pass
@@ -73,7 +82,16 @@ class FieldScene(Scene):
         elif self._any_key(KEY_MOVE_DOWN):  dy = 1
         elif self._any_key(KEY_MOVE_LEFT):  dx = -1
         elif self._any_key(KEY_MOVE_RIGHT): dx = 1
-        else:
+
+        # 入力された向きを記録（移動できなくても向きは変わる）
+        if dx != 0 or dy != 0:
+            if   dy == -1: self._dir = 3
+            elif dy ==  1: self._dir = 0
+            elif dx == -1: self._dir = 2
+            elif dx ==  1: self._dir = 1
+
+        self._moving = False
+        if dx == 0 and dy == 0:
             return
 
         nx = self.player.pos[0] + dx
@@ -88,6 +106,8 @@ class FieldScene(Scene):
             return
 
         self.player.pos = [nx, ny]
+        self._moving = True
+        self._step += 1
 
         if tile in TILE_WARP:
             self._warp()
@@ -142,7 +162,11 @@ class FieldScene(Scene):
 
         sx = (self.player.pos[0] - cam_x) * TILE_SIZE
         sy = (self.player.pos[1] - cam_y) * TILE_SIZE
-        pyxel.blt(sx, sy, 1, 0, 0, TILE_SIZE, TILE_SIZE, 0)
+        # 歩行アニメ：移動するたびに _step が増え、1歩おきにフレームを切り替える
+        anim_frame = self._step % 2          # 0 or 1
+        sprite_u = anim_frame * TILE_SIZE    # フレーム0=u:0, フレーム1=u:16
+        sprite_v = _DIR_V[self._dir]         # 向きに応じた行
+        pyxel.blt(sx, sy, 1, sprite_u, sprite_v, TILE_SIZE, TILE_SIZE, 0)
 
         area_names = {"field_1": "そうげん", "cave_1": "どうくつ"}
         name = area_names.get(self.player.area, self.player.area)
