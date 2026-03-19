@@ -1,6 +1,7 @@
 # scenes/battle_scene.py
 """Turn-based battle screen."""
 from __future__ import annotations
+import math
 import pyxel
 from scene_manager import Scene, SceneManager
 from gfx import jtext
@@ -23,6 +24,9 @@ _CMD_H         = 48
 _MSG_H         = 48
 _SPRITE_W      = 64
 _SPRITE_H      = 64
+
+# タイプライター速度（フレームあたり文字数）
+_TYPEWRITER_SPEED = 2
 
 _COMMANDS = ["たたかう", "つかまえる", "にげる", "アイテム"]
 _CMD_DISABLED = {3}   # "アイテム" greyed out in Phase A
@@ -48,6 +52,12 @@ class BattleScene(Scene):
         self.messages: list[str] = []
         self.msg_index = 0
         self._pending_state = BattleState.COMMAND
+        # アニメーション用
+        self._wild_blink   = 0   # 残フレーム数（偶数フレームで非表示）
+        self._player_blink = 0
+        self._disp_wild_hp   = 0  # アニメーション中の表示HP
+        self._disp_player_hp = 0
+        self._msg_chars = 0       # タイプライター表示文字数
 
     @property
     def player(self) -> Player:
@@ -56,10 +66,15 @@ class BattleScene(Scene):
     def on_enter(self, wild_monster: Monster, **kwargs) -> None:
         self.wild = wild_monster
         self.cursor = 0
-        self.messages = [f"やせいの {wild_monster.spec.name} が あらわれた！"]
-        self.msg_index = 0
         self._pending_state = BattleState.COMMAND
         self.state = BattleState.MESSAGE
+        self._wild_blink   = 0
+        self._player_blink = 0
+        self._disp_wild_hp   = wild_monster.max_hp
+        mon = self.player.active_monster
+        self._disp_player_hp = mon.max_hp if mon else 0
+        self._show_messages([f"やせいの {wild_monster.spec.name} が あらわれた！"],
+                            BattleState.COMMAND)
 
     def on_exit(self) -> None:
         pass
@@ -67,7 +82,10 @@ class BattleScene(Scene):
     def _any(self, keys: list[int]) -> bool:
         return any(pyxel.btnp(k) for k in keys)
 
+    # ── update ──────────────────────────────────────────────────────────────
+
     def update(self) -> None:
+        self._tick_animations()
         if self.state == BattleState.MESSAGE:
             self._update_message()
         elif self.state == BattleState.COMMAND:
@@ -78,13 +96,50 @@ class BattleScene(Scene):
                             BattleState.FLEE, BattleState.CAUGHT):
             self._update_end()
 
+    def _tick_animations(self) -> None:
+        """毎フレーム呼ぶアニメーション更新。"""
+        if self._wild_blink > 0:
+            self._wild_blink -= 1
+        if self._player_blink > 0:
+            self._player_blink -= 1
+
+        # HPバーアニメーション：表示値を実値に近づける
+        if self.wild:
+            self._disp_wild_hp = self._approach(self._disp_wild_hp,
+                                                 self.wild.current_hp)
+        mon = self.player.active_monster
+        if mon:
+            self._disp_player_hp = self._approach(self._disp_player_hp,
+                                                   mon.current_hp)
+
+        # タイプライター文字数を進める
+        if self.state == BattleState.MESSAGE and self.messages:
+            msg = self.messages[self.msg_index]
+            if self._msg_chars < len(msg):
+                self._msg_chars = min(len(msg), self._msg_chars + _TYPEWRITER_SPEED)
+
+    def _approach(self, current: float, target: int) -> float:
+        """currentをtargetに向けて毎フレーム近づける。"""
+        diff = target - current
+        if abs(diff) <= 1:
+            return float(target)
+        return current + diff * 0.15  # 15%ずつ縮める
+
     def _update_message(self) -> None:
-        if self._any(KEY_CONFIRM):
+        if not self._any(KEY_CONFIRM):
+            return
+        msg = self.messages[self.msg_index] if self.messages else ""
+        if self._msg_chars < len(msg):
+            # 全文をすぐに表示（スキップ）
+            self._msg_chars = len(msg)
+        else:
             self.msg_index += 1
             if self.msg_index >= len(self.messages):
                 self.state = self._pending_state
                 self.msg_index = 0
                 self.messages = []
+            else:
+                self._msg_chars = 0
 
     def _update_command(self) -> None:
         if self._any(KEY_MOVE_UP):     self.cursor = (self.cursor - 2) % 4
@@ -97,12 +152,12 @@ class BattleScene(Scene):
         if self._any(KEY_CONFIRM):
             if self.cursor in _CMD_DISABLED:
                 self._show_messages(["アイテムがない！"], BattleState.COMMAND)
-            elif self.cursor == 0:   # たたかう
+            elif self.cursor == 0:
                 self.state = BattleState.MOVE
                 self.cursor = 0
-            elif self.cursor == 1:   # つかまえる
+            elif self.cursor == 1:
                 self._do_catch()
-            elif self.cursor == 2:   # にげる
+            elif self.cursor == 2:
                 self._show_messages(["にげた！"], BattleState.FLEE)
 
     def _update_move(self) -> None:
@@ -127,11 +182,14 @@ class BattleScene(Scene):
                 self.player.add_to_party(self.wild)
             self.sm.switch("field")
 
+    # ── actions ─────────────────────────────────────────────────────────────
+
     def _do_attack(self, move) -> None:
         player_mon = self.player.active_monster
         msgs = []
         dmg = calc_damage(player_mon, self.wild, move)
         self.wild.current_hp = max(0, self.wild.current_hp - dmg)
+        self._wild_blink = 16  # 敵ダメージ点滅
         msgs.append(f"{player_mon.spec.name} の {move.name}！")
         msgs.append(f"{self.wild.spec.name} に {dmg} ダメージ！")
 
@@ -148,6 +206,7 @@ class BattleScene(Scene):
         enemy_move = enemy_choose_move(self.wild)
         edm = calc_damage(self.wild, player_mon, enemy_move)
         player_mon.current_hp = max(0, player_mon.current_hp - edm)
+        self._player_blink = 16  # 味方ダメージ点滅
         msgs.append(f"てきの {self.wild.spec.name} の {enemy_move.name}！")
         msgs.append(f"{player_mon.spec.name} に {edm} ダメージ！")
 
@@ -177,6 +236,9 @@ class BattleScene(Scene):
         self.msg_index = 0
         self._pending_state = next_state
         self.state = BattleState.MESSAGE
+        self._msg_chars = 0  # タイプライターリセット
+
+    # ── draw ────────────────────────────────────────────────────────────────
 
     def draw(self) -> None:
         pyxel.cls(0)
@@ -189,7 +251,12 @@ class BattleScene(Scene):
         else:
             self._draw_message_box()
 
-    def _draw_hp_bar(self, x: int, y: int, current: int, max_hp: int, width: int = 64) -> None:
+    def _bob_offset(self, phase: float = 0.0) -> int:
+        """モンスターの上下揺れオフセット（±2px）。"""
+        return int(math.sin(pyxel.frame_count * 0.12 + phase) * 2)
+
+    def _draw_hp_bar(self, x: int, y: int, current: float, max_hp: int,
+                     width: int = 64) -> None:
         ratio = current / max_hp if max_hp > 0 else 0
         filled = int(width * ratio)
         pyxel.rect(x, y, width, 4, 1)
@@ -199,24 +266,33 @@ class BattleScene(Scene):
 
     def _draw_enemy_pane(self) -> None:
         pyxel.rect(0, _ENEMY_PANE_Y, SCREEN_WIDTH, _PANE_H, 5)
-        if self.wild:
-            pyxel.rectb(8, _ENEMY_PANE_Y + 8, _SPRITE_W, _SPRITE_H, 7)
-            jtext(8,   _ENEMY_PANE_Y + 2, self.wild.spec.name, 7)
-            jtext(160, _ENEMY_PANE_Y + 2, f"Lv{self.wild.level}", 7)
-            self._draw_hp_bar(160, _ENEMY_PANE_Y + 12, self.wild.current_hp, self.wild.max_hp)
-            jtext(160, _ENEMY_PANE_Y + 18,
-                       f"{self.wild.current_hp}/{self.wild.max_hp}", 7)
+        if not self.wild:
+            return
+        # 点滅中は偶数フレームで表示をスキップ
+        if self._wild_blink == 0 or self._wild_blink % 4 >= 2:
+            bob = self._bob_offset(phase=0.0)
+            pyxel.rectb(8, _ENEMY_PANE_Y + 8 + bob, _SPRITE_W, _SPRITE_H, 7)
+        jtext(8,   _ENEMY_PANE_Y + 2, self.wild.spec.name, 7)
+        jtext(160, _ENEMY_PANE_Y + 2, f"Lv{self.wild.level}", 7)
+        self._draw_hp_bar(160, _ENEMY_PANE_Y + 12,
+                          self._disp_wild_hp, self.wild.max_hp)
+        jtext(160, _ENEMY_PANE_Y + 18,
+              f"{int(self._disp_wild_hp)}/{self.wild.max_hp}", 7)
 
     def _draw_player_pane(self) -> None:
         pyxel.rect(0, _PLAYER_PANE_Y, SCREEN_WIDTH, _PANE_H, 1)
         mon = self.player.active_monster
-        if mon:
-            pyxel.rectb(160, _PLAYER_PANE_Y + 8, _SPRITE_W, _SPRITE_H, 7)
-            jtext(8, _PLAYER_PANE_Y + 2,  mon.spec.name, 7)
-            jtext(8, _PLAYER_PANE_Y + 10, f"Lv{mon.level}", 7)
-            self._draw_hp_bar(8, _PLAYER_PANE_Y + 20, mon.current_hp, mon.max_hp)
-            jtext(8, _PLAYER_PANE_Y + 26,
-                       f"{mon.current_hp}/{mon.max_hp}", 7)
+        if not mon:
+            return
+        if self._player_blink == 0 or self._player_blink % 4 >= 2:
+            bob = self._bob_offset(phase=math.pi)  # 逆位相で揺れる
+            pyxel.rectb(160, _PLAYER_PANE_Y + 8 + bob, _SPRITE_W, _SPRITE_H, 7)
+        jtext(8, _PLAYER_PANE_Y + 2,  mon.spec.name, 7)
+        jtext(8, _PLAYER_PANE_Y + 10, f"Lv{mon.level}", 7)
+        self._draw_hp_bar(8, _PLAYER_PANE_Y + 20,
+                          self._disp_player_hp, mon.max_hp)
+        jtext(8, _PLAYER_PANE_Y + 26,
+              f"{int(self._disp_player_hp)}/{mon.max_hp}", 7)
 
     def _draw_command_menu(self) -> None:
         pyxel.rect(0, _CMD_PANE_Y, SCREEN_WIDTH, _CMD_H, 2)
@@ -240,10 +316,17 @@ class BattleScene(Scene):
         pyxel.rect(0, _MSG_PANE_Y, SCREEN_WIDTH, _MSG_H, 1)
         pyxel.rectb(0, _MSG_PANE_Y, SCREEN_WIDTH, _MSG_H, 7)
         if self.messages and self.msg_index < len(self.messages):
-            jtext(8, _MSG_PANE_Y + 8, self.messages[self.msg_index], 7)
-        # Show advance indicator unless on last message of a terminal state
+            msg = self.messages[self.msg_index]
+            jtext(8, _MSG_PANE_Y + 8, msg[:int(self._msg_chars)], 7)
+
+        # 全文表示済みのときだけ ▼ を表示
         at_last = self.msg_index >= len(self.messages) - 1
         terminal = self.state in (BattleState.WIN, BattleState.LOSE,
                                   BattleState.FLEE, BattleState.CAUGHT)
-        if not (at_last and terminal):
-            jtext(SCREEN_WIDTH - 12, _MSG_PANE_Y + _MSG_H - 10, "v", 7)
+        msg_full = (not self.messages or
+                    self._msg_chars >= len(self.messages[self.msg_index]
+                                           if self.msg_index < len(self.messages) else ""))
+        if msg_full and not (at_last and terminal):
+            # ▼ をフレームカウントで点滅
+            if pyxel.frame_count % 30 < 20:
+                jtext(SCREEN_WIDTH - 12, _MSG_PANE_Y + _MSG_H - 10, "v", 7)

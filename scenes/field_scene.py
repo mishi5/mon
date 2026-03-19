@@ -16,7 +16,6 @@ from config.params import (
 )
 from save import save_game
 
-
 AREA_MAP_BANK = {
     "field_1": 0,
     "cave_1":  1,
@@ -30,23 +29,37 @@ AREA_WARP_DEST = {
     "cave_1":  "field_1",
 }
 
+# エンカウントフラッシュのフレーム数（白黒を交互に）
+_FLASH_FRAMES = 24
+
 
 class FieldScene(Scene):
     def __init__(self, sm: SceneManager, player_ref: list):
         self.sm = sm
         self.player_ref = player_ref
+        self._flash_timer = 0
+        self._flash_wild = None
 
     @property
     def player(self) -> Player:
         return self.player_ref[0]
 
     def on_enter(self, **kwargs) -> None:
-        pass
+        self._flash_timer = 0
+        self._flash_wild = None
 
     def on_exit(self) -> None:
         pass
 
     def update(self) -> None:
+        if self._flash_timer > 0:
+            self._flash_timer -= 1
+            if self._flash_timer == 0 and self._flash_wild is not None:
+                wild = self._flash_wild
+                self._flash_wild = None
+                self.sm.switch("battle", wild_monster=wild)
+            return  # フラッシュ中は移動・メニュー不可
+
         self._handle_move()
         self._check_menu()
 
@@ -56,10 +69,10 @@ class FieldScene(Scene):
 
     def _handle_move(self) -> None:
         dx, dy = 0, 0
-        if self._any_key(KEY_MOVE_UP):     dy = -1
-        elif self._any_key(KEY_MOVE_DOWN): dy = 1
-        elif self._any_key(KEY_MOVE_LEFT): dx = -1
-        elif self._any_key(KEY_MOVE_RIGHT):dx = 1
+        if self._any_key(KEY_MOVE_UP):      dy = -1
+        elif self._any_key(KEY_MOVE_DOWN):  dy = 1
+        elif self._any_key(KEY_MOVE_LEFT):  dx = -1
+        elif self._any_key(KEY_MOVE_RIGHT): dx = 1
         else:
             return
 
@@ -90,17 +103,18 @@ class FieldScene(Scene):
         return (v // 8) * 32 + (u // 8)
 
     def _check_encounter(self) -> None:
-        if random.random() < ENCOUNTER_RATE:
-            wild_spec = pick_encounter(self.player.area)
-            base_level = self.player.active_monster.level if self.player.active_monster else 5
-            wild_level = max(2, base_level + random.randint(-2, 2))
-            from data.moves import MOVES
-            wild_move_ids = [mid for (lv, mid) in wild_spec.learnable_moves if lv <= wild_level][:4] or [1]
-            wild_moves = [MOVES[mid] for mid in wild_move_ids if mid in MOVES][:4]
-            if not wild_moves:
-                wild_moves = [MOVES[1]]
-            wild = create_monster(wild_spec, wild_level, wild_moves)
-            self.sm.switch("battle", wild_monster=wild)
+        if random.random() >= ENCOUNTER_RATE:
+            return
+        wild_spec = pick_encounter(self.player.area)
+        base_level = self.player.active_monster.level if self.player.active_monster else 5
+        wild_level = max(2, base_level + random.randint(-2, 2))
+        from data.moves import MOVES
+        wild_move_ids = [mid for (lv, mid) in wild_spec.learnable_moves if lv <= wild_level][:4] or [1]
+        wild_moves = [MOVES[mid] for mid in wild_move_ids if mid in MOVES][:4]
+        if not wild_moves:
+            wild_moves = [MOVES[1]]
+        self._flash_wild = create_monster(wild_spec, wild_level, wild_moves)
+        self._flash_timer = _FLASH_FRAMES  # フラッシュ開始
 
     def _warp(self) -> None:
         dest = AREA_WARP_DEST[self.player.area]
@@ -125,11 +139,16 @@ class FieldScene(Scene):
         pyxel.bltm(0, 0, bank,
                    cam_x * TILE_SIZE, cam_y * TILE_SIZE,
                    SCREEN_WIDTH, SCREEN_HEIGHT, 0)
-        # Player sprite (static tile until assets are ready)
+
         sx = (self.player.pos[0] - cam_x) * TILE_SIZE
         sy = (self.player.pos[1] - cam_y) * TILE_SIZE
         pyxel.blt(sx, sy, 1, 0, 0, TILE_SIZE, TILE_SIZE, 0)
-        # Area name (top-right)
+
         area_names = {"field_1": "そうげん", "cave_1": "どうくつ"}
         name = area_names.get(self.player.area, self.player.area)
         jtext(SCREEN_WIDTH - text_width(name) - 4, 2, name, 7)
+
+        # エンカウントフラッシュ：白黒を4フレームごとに交互
+        if self._flash_timer > 0:
+            flash_color = 7 if (self._flash_timer // 4) % 2 == 0 else 0
+            pyxel.rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, flash_color)
